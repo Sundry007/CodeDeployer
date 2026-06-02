@@ -1,0 +1,33 @@
+{
+  "id": "example-web-app",
+  "name": "Example Web App",
+  "enabled": true,
+  "localPath": "E:\\Workspace\\example-web-app",
+  "remote": {
+    "protocol": "sftp",
+    "host": "203.0.113.10",
+    "port": 22,
+    "username": "deploy",
+    "authMode": "privateKey",
+    "remotePath": "/var/www/example-web-app"
+  },
+  "ignore": [
+    ".git/",
+    "node_modules/",
+    "dist/",
+    "build/",
+    ".next/",
+    ".nuxt/",
+    "vendor/",
+    "coverage/",
+    ".cache/",
+    "storage/logs/",
+    "*.log",
+    ".env",
+    ".env.*",
+    "*.pem",
+    "*.key"
+  ],
+  "deleteRemote": false,
+  "concurrency": 2
+}

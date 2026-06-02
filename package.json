@@ -1,0 +1,93 @@
+{
+  "name": "codedeployer",
+  "version": "0.1.0",
+  "description": "Desktop app for automatically syncing local development files to server directories over FTP or SFTP.",
+  "main": "dist/main/app.js",
+  "scripts": {
+    "dev": "npm run build:main && concurrently -k \"npm:dev:renderer\" \"npm:dev:electron\"",
+    "dev:renderer": "vite --host 127.0.0.1",
+    "dev:electron": "wait-on http://127.0.0.1:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .",
+    "icons": "powershell -ExecutionPolicy Bypass -File scripts\\generate-icons.ps1",
+    "build": "npm run typecheck && npm run build:main && npm run build:renderer",
+    "build:main": "tsc -p tsconfig.main.json",
+    "build:renderer": "vite build",
+    "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
+    "start": "electron .",
+    "dist:win": "powershell -ExecutionPolicy Bypass -File scripts\\build-windows-installer.ps1",
+    "pack:win": "npm run icons && npm run build && electron-builder --win dir --x64 --config.directories.output=release-pack"
+  },
+  "build": {
+    "appId": "com.codedeployer.app",
+    "productName": "CodeDeployer",
+    "asar": true,
+    "npmRebuild": false,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json",
+      "node_modules/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "assets/icon.ico",
+        "to": "icon.ico"
+      }
+    ],
+    "win": {
+      "icon": "assets/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "${productName}-Setup-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "CodeDeployer"
+    }
+  },
+  "keywords": [
+    "sftp",
+    "ftp",
+    "sync",
+    "electron",
+    "deployment"
+  ],
+  "author": "CodeDeployer contributors",
+  "license": "MIT",
+  "dependencies": {
+    "basic-ftp": "^6.0.1",
+    "chokidar": "^4.0.3",
+    "lucide-react": "^0.468.0",
+    "picomatch": "^4.0.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "ssh2-sftp-client": "^11.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/picomatch": "^3.0.1",
+    "@types/react": "^18.3.17",
+    "@types/react-dom": "^18.3.5",
+    "@types/ssh2-sftp-client": "^9.0.4",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.0",
+    "cross-env": "^7.0.3",
+    "electron": "^42.3.2",
+    "electron-builder": "^26.8.1",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.3",
+    "wait-on": "^8.0.1"
+  }
+}
