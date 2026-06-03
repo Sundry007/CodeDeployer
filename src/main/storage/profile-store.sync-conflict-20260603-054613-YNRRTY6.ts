@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { ProfileInput, SyncProfile } from "../../shared/types";
-import { DEFAULT_IGNORE_RULES } from "../../shared/types";
+import type { ProfileInput, SyncProfile, TransferProtocol } from "../../shared/types";
 import { JsonFile } from "./json-file";
 
 interface ProfileFile {
@@ -16,7 +15,7 @@ export class ProfileStore {
 
   async list(): Promise<SyncProfile[]> {
     const data = await this.file.read();
-    return data.profiles;
+    return data.profiles.map(normalizeStoredProfile);
   }
 
   async save(input: ProfileInput): Promise<SyncProfile> {
@@ -29,13 +28,13 @@ export class ProfileStore {
       enabled: Boolean(input.enabled),
       localPath: input.localPath.trim(),
       remote: {
-        protocol: input.remote.protocol ?? "sftp",
+        protocol: normalizeProtocol(input.remote.protocol),
         host: input.remote.host.trim(),
-        port: Number(input.remote.port) || (input.remote.protocol === "ftp" ? 21 : 22),
+        port: Number(input.remote.port) || defaultPort(input.remote.protocol),
         username: input.remote.username.trim(),
-        authMode: input.remote.authMode,
+        authMode: normalizeProtocol(input.remote.protocol) === "ftp" ? "password" : input.remote.authMode,
         remotePath: normalizeRemoteRoot(input.remote.remotePath),
-        privateKeyPath: input.remote.privateKeyPath?.trim() || undefined
+        privateKeyPath: normalizeProtocol(input.remote.protocol) === "ftp" ? undefined : input.remote.privateKeyPath?.trim() || undefined
       },
       ignore: normalizeIgnoreRules(input.ignore),
       deleteRemote: Boolean(input.deleteRemote),
@@ -58,7 +57,7 @@ export class ProfileStore {
 
     const nextProfiles = existing
       ? data.profiles.map((item) => (item.id === profile.id ? profile : item))
-      : [...data.profiles, profile];
+      : [profile, ...data.profiles];
 
     await this.file.write({ profiles: nextProfiles });
     return profile;
@@ -92,6 +91,29 @@ function normalizeRemoteRoot(remotePath: string): string {
 
 function normalizeIgnoreRules(rules: string[]): string[] {
   const cleaned = rules.map((rule) => rule.trim()).filter(Boolean);
-  const merged = [...DEFAULT_IGNORE_RULES, ...cleaned];
-  return Array.from(new Set(merged));
+  return Array.from(new Set(cleaned));
+}
+
+function normalizeStoredProfile(profile: SyncProfile): SyncProfile {
+  const protocol = normalizeProtocol(profile.remote.protocol);
+
+  return {
+    ...profile,
+    remote: {
+      ...profile.remote,
+      protocol,
+      port: Number(profile.remote.port) || defaultPort(protocol),
+      authMode: protocol === "ftp" ? "password" : profile.remote.authMode,
+      privateKeyPath: protocol === "ftp" ? undefined : profile.remote.privateKeyPath,
+      remotePath: normalizeRemoteRoot(profile.remote.remotePath)
+    }
+  };
+}
+
+function normalizeProtocol(protocol?: TransferProtocol): TransferProtocol {
+  return protocol === "ftp" ? "ftp" : "sftp";
+}
+
+function defaultPort(protocol?: TransferProtocol): number {
+  return normalizeProtocol(protocol) === "ftp" ? 21 : 22;
 }

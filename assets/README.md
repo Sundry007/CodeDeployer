@@ -10,10 +10,10 @@ The mark combines three product signals:
 
 ## Files
 
-- `icon.svg`: square app mark source.
 - `icon.png`: raster app mark.
 - `icon.ico`: Windows application and installer icon.
-- `codedeployer-logo.svg`: horizontal wordmark for documentation, splash screens, and presentation use.
+
+Future signed macOS builds should add a platform-specific `.icns` file.
 
 ## Palette
 

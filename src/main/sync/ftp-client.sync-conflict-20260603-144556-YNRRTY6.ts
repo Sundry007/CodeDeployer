@@ -1,6 +1,7 @@
 import { Client } from "basic-ftp";
-import posixPath from "node:path/posix";
 import { promises as fs } from "node:fs";
+import path from "node:path";
+import posixPath from "node:path/posix";
 import type { ProfileSecretInput, RemoteDirectoryListing, RemoteFileInfo, SyncProfile } from "../../shared/types";
 import { normalizeRemoteRoot } from "./remote-path";
 
@@ -28,25 +29,6 @@ export async function uploadFtpFileAtomic(
     await client.uploadFrom(localFilePath, tempRemotePath);
     await renameOverExisting(client, tempRemotePath, remoteFilePath);
   } finally {
-    client.close();
-  }
-}
-
-export async function downloadFtpFileAtomic(
-  profile: SyncProfile,
-  secret: ProfileSecretInput,
-  remoteFilePath: string,
-  localFilePath: string
-): Promise<void> {
-  const client = await createFtpClient(profile, secret);
-  const tempLocalPath = `${localFilePath}.__codedeployer_tmp__`;
-
-  try {
-    await fs.mkdir(posixPath.dirname(localFilePath), { recursive: true });
-    await client.downloadTo(tempLocalPath, remoteFilePath);
-    await fs.rename(tempLocalPath, localFilePath);
-  } finally {
-    await fs.unlink(tempLocalPath).catch(() => undefined);
     client.close();
   }
 }
@@ -96,48 +78,36 @@ export async function listFtpRemoteDirectories(
 export async function listFtpRemoteFiles(
   profile: SyncProfile,
   secret: ProfileSecretInput,
-  shouldSkipRelative: (relativePath: string) => boolean
+  shouldSkipRelative?: (relativePath: string) => boolean
 ): Promise<RemoteFileInfo[]> {
   const client = await createFtpClient(profile, secret);
-  const rootPath = normalizeRemoteRoot(profile.remote.remotePath);
+  const remoteRoot = normalizeRemoteRoot(profile.remote.remotePath || "/");
   const files: RemoteFileInfo[] = [];
 
   try {
-    await visitRemoteDirectory(client, rootPath, "", shouldSkipRelative, files);
+    await visitFtpDirectory(client, remoteRoot, "", files, shouldSkipRelative);
     return files;
   } finally {
     client.close();
   }
 }
 
-async function visitRemoteDirectory(
-  client: Client,
-  remotePath: string,
-  relativeRoot: string,
-  shouldSkipRelative: (relativePath: string) => boolean,
-  files: RemoteFileInfo[]
+export async function downloadFtpFileAtomic(
+  profile: SyncProfile,
+  secret: ProfileSecretInput,
+  remoteFilePath: string,
+  localFilePath: string
 ): Promise<void> {
-  const entries = await client.list(remotePath);
+  const client = await createFtpClient(profile, secret);
+  const tempLocalPath = `${localFilePath}.codedeployer-download-${Date.now()}.tmp`;
 
-  for (const entry of entries) {
-    const relativePath = relativeRoot ? posixPath.join(relativeRoot, entry.name) : entry.name;
-
-    if (shouldSkipRelative(relativePath)) {
-      continue;
-    }
-
-    const nextRemotePath = posixPath.join(remotePath, entry.name);
-
-    if (entry.isDirectory) {
-      await visitRemoteDirectory(client, nextRemotePath, relativePath, shouldSkipRelative, files);
-    } else {
-      files.push({
-        relativePath,
-        remotePath: nextRemotePath,
-        size: Number(entry.size) || 0,
-        modifiedAt: entry.modifiedAt?.toISOString()
-      });
-    }
+  try {
+    await fs.mkdir(path.dirname(localFilePath), { recursive: true });
+    await client.downloadTo(tempLocalPath, remoteFilePath);
+    await replaceLocalFile(tempLocalPath, localFilePath);
+  } finally {
+    client.close();
+    await fs.rm(tempLocalPath, { force: true }).catch(() => undefined);
   }
 }
 
@@ -162,6 +132,45 @@ async function createFtpClient(profile: SyncProfile, secret: ProfileSecretInput)
     client.close();
     throw error;
   }
+}
+
+async function visitFtpDirectory(
+  client: Client,
+  remoteDirectory: string,
+  relativeDirectory: string,
+  files: RemoteFileInfo[],
+  shouldSkipRelative?: (relativePath: string) => boolean
+): Promise<void> {
+  const entries = await client.list(remoteDirectory);
+
+  for (const entry of entries) {
+    const relativePath = posixPath.join(relativeDirectory, entry.name);
+
+    if (shouldSkipRelative?.(relativePath)) {
+      continue;
+    }
+
+    const remotePath = posixPath.join(remoteDirectory, entry.name);
+
+    if (entry.isDirectory) {
+      await visitFtpDirectory(client, remotePath, relativePath, files, shouldSkipRelative);
+      continue;
+    }
+
+    if (entry.isFile) {
+      files.push({
+        relativePath,
+        remotePath,
+        size: entry.size,
+        modifiedAt: entry.modifiedAt?.toISOString()
+      });
+    }
+  }
+}
+
+async function replaceLocalFile(tempLocalPath: string, localFilePath: string): Promise<void> {
+  await fs.rm(localFilePath, { force: true }).catch(() => undefined);
+  await fs.rename(tempLocalPath, localFilePath);
 }
 
 async function renameOverExisting(client: Client, tempRemotePath: string, remoteFilePath: string): Promise<void> {

@@ -49,19 +49,6 @@ export async function deleteRemoteFile(
   return deleteSftpRemoteFile(profile, secret, remoteFilePath);
 }
 
-export async function downloadFileAtomic(
-  profile: SyncProfile,
-  secret: ProfileSecretInput,
-  remoteFilePath: string,
-  localFilePath: string
-): Promise<void> {
-  if (profile.remote.protocol === "ftp") {
-    return downloadFtpFileAtomic(profile, secret, remoteFilePath, localFilePath);
-  }
-
-  return downloadSftpFileAtomic(profile, secret, remoteFilePath, localFilePath);
-}
-
 export async function listRemoteDirectories(
   profile: SyncProfile,
   secret: ProfileSecretInput,
@@ -77,11 +64,24 @@ export async function listRemoteDirectories(
 export async function listRemoteFiles(
   profile: SyncProfile,
   secret: ProfileSecretInput,
-  shouldSkipRelative: (relativePath: string) => boolean
+  shouldSkipRelative?: (relativePath: string) => boolean
 ): Promise<RemoteFileInfo[]> {
   if (profile.remote.protocol === "ftp") {
     return listFtpRemoteFiles(profile, secret, shouldSkipRelative);
   }
 
   return listSftpRemoteFiles(profile, secret, shouldSkipRelative);
+}
+
+export async function downloadFileAtomic(
+  profile: SyncProfile,
+  secret: ProfileSecretInput,
+  remoteFilePath: string,
+  localFilePath: string
+): Promise<void> {
+  if (profile.remote.protocol === "ftp") {
+    return downloadFtpFileAtomic(profile, secret, remoteFilePath, localFilePath);
+  }
+
+  return downloadSftpFileAtomic(profile, secret, remoteFilePath, localFilePath);
 }

@@ -12,7 +12,8 @@ export type LogEvent =
   | "upload"
   | "manual"
   | "connection"
-  | "delete";
+  | "delete"
+  | "download";
 
 export interface RemoteConnection {
   protocol: TransferProtocol;
@@ -21,6 +22,15 @@ export interface RemoteConnection {
   username: string;
   authMode: AuthMode;
   remotePath: string;
+  privateKeyPath?: string;
+}
+
+export interface ServerConnection {
+  protocol: TransferProtocol;
+  host: string;
+  port: number;
+  username: string;
+  authMode: AuthMode;
   privateKeyPath?: string;
 }
 
@@ -35,6 +45,11 @@ export interface SyncProfile {
   concurrency: number;
   createdAt: string;
   updatedAt: string;
+  source?: "mapping" | "workspace";
+  workspaceId?: string;
+  workspaceRuleId?: string;
+  secretId?: string;
+  secretStatus?: CredentialStatus;
 }
 
 export interface ProfileSecretInput {
@@ -42,8 +57,48 @@ export interface ProfileSecretInput {
   privateKeyPassphrase?: string;
 }
 
-export type ProfileInput = Omit<SyncProfile, "id" | "createdAt" | "updatedAt"> & {
+export interface CredentialStatus {
+  hasPassword: boolean;
+  hasPrivateKeyPassphrase: boolean;
+}
+
+export type ProfileInput = Omit<SyncProfile, "id" | "createdAt" | "updatedAt" | "secretStatus"> & {
   id?: string;
+  secret?: ProfileSecretInput;
+};
+
+export interface ServerWorkspaceRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  localPath: string;
+  remotePath: string;
+  ignore: string[];
+  deleteRemote: boolean;
+  concurrency: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ServerWorkspaceRuleInput = Omit<ServerWorkspaceRule, "id" | "createdAt" | "updatedAt"> & {
+  id?: string;
+};
+
+export interface ServerWorkspace {
+  id: string;
+  name: string;
+  enabled: boolean;
+  connection: ServerConnection;
+  defaultIgnore: string[];
+  rules: ServerWorkspaceRule[];
+  createdAt: string;
+  updatedAt: string;
+  secretStatus?: CredentialStatus;
+}
+
+export type ServerWorkspaceInput = Omit<ServerWorkspace, "id" | "createdAt" | "updatedAt" | "rules" | "secretStatus"> & {
+  id?: string;
+  rules: ServerWorkspaceRuleInput[];
   secret?: ProfileSecretInput;
 };
 
@@ -71,6 +126,7 @@ export interface SyncStatus {
 
 export interface AppSnapshot {
   profiles: SyncProfile[];
+  workspaces: ServerWorkspace[];
   statuses: SyncStatus[];
   logs: SyncLog[];
 }
@@ -91,13 +147,6 @@ export interface RemoteDirectoryListing {
   directories: RemoteDirectoryEntry[];
 }
 
-export interface LocalFileInfo {
-  relativePath: string;
-  localPath: string;
-  size: number;
-  modifiedAt?: string;
-}
-
 export interface RemoteFileInfo {
   relativePath: string;
   remotePath: string;
@@ -105,13 +154,20 @@ export interface RemoteFileInfo {
   modifiedAt?: string;
 }
 
-export type DownloadDiffType = "changed" | "remote-only" | "local-only";
+export interface LocalFileInfo {
+  relativePath: string;
+  localPath: string;
+  size: number;
+  modifiedAt?: string;
+}
+
+export type DownloadDiffType = "remote-only" | "changed" | "local-only";
 
 export interface DownloadDiff {
   type: DownloadDiffType;
   relativePath: string;
   selected: boolean;
-  localPath?: string;
+  localPath: string;
   remotePath?: string;
   localSize?: number;
   remoteSize?: number;
@@ -134,16 +190,36 @@ export interface DownloadResult {
   }>;
 }
 
+export interface IgnoreRuleSuggestion {
+  rule: string;
+  reason: string;
+}
+
+export interface IgnoreRuleScanResult {
+  rootPath: string;
+  suggestions: IgnoreRuleSuggestion[];
+}
+
 export interface CodeDeployerApi {
   getSnapshot: () => Promise<AppSnapshot>;
   saveProfile: (input: ProfileInput) => Promise<SyncProfile>;
   deleteProfile: (id: string) => Promise<void>;
   setProfileEnabled: (id: string, enabled: boolean) => Promise<SyncProfile | undefined>;
   syncNow: (id: string) => Promise<number>;
+  clearQueue: (id: string) => Promise<void>;
+  saveWorkspace: (input: ServerWorkspaceInput) => Promise<ServerWorkspace>;
+  deleteWorkspace: (id: string) => Promise<void>;
+  syncWorkspaceRule: (workspaceId: string, ruleId: string) => Promise<number>;
+  syncWorkspace: (workspaceId: string) => Promise<number>;
+  clearWorkspaceRuleQueue: (workspaceId: string, ruleId: string) => Promise<void>;
   testConnection: (id: string) => Promise<ConnectionTestResult>;
+  testConnectionInput: (input: ProfileInput) => Promise<ConnectionTestResult>;
   selectLocalDirectory: (currentPath?: string) => Promise<string | undefined>;
   selectPrivateKeyFile: (currentPath?: string) => Promise<string | undefined>;
   listRemoteDirectories: (input: ProfileInput, remotePath: string) => Promise<RemoteDirectoryListing>;
+  scanDownloadDiff: (input: ProfileInput) => Promise<DownloadPreview>;
+  downloadDiffs: (input: ProfileInput, diffs: DownloadDiff[]) => Promise<DownloadResult>;
+  suggestIgnoreRules: (localPath: string) => Promise<IgnoreRuleScanResult>;
   onSnapshotChanged: (callback: (snapshot: AppSnapshot) => void) => () => void;
 }
 
@@ -164,3 +240,7 @@ export const DEFAULT_IGNORE_RULES = [
   "*.pem",
   "*.key"
 ];
+
+export function workspaceRuleProfileId(workspaceId: string, ruleId: string): string {
+  return `workspace:${workspaceId}:${ruleId}`;
+}

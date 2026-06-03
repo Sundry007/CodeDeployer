@@ -1,69 +1,71 @@
 {
   "name": "codedeployer",
   "version": "0.1.0",
-  "private": true,
-  "description": "Desktop app for automatically syncing local development files to server directories over SFTP.",
+  "description": "Desktop app for automatically syncing local development files to server directories over FTP or SFTP.",
   "main": "dist/main/app.js",
   "scripts": {
     "dev": "npm run build:main && concurrently -k \"npm:dev:renderer\" \"npm:dev:electron\"",
     "dev:renderer": "vite --host 127.0.0.1",
     "dev:electron": "wait-on http://127.0.0.1:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .",
+    "icons": "powershell -ExecutionPolicy Bypass -File scripts\\generate-icons.ps1",
     "build": "npm run typecheck && npm run build:main && npm run build:renderer",
     "build:main": "tsc -p tsconfig.main.json",
     "build:renderer": "vite build",
-    "pack:mac": "npm run build && electron-builder --mac --dir --arm64 --x64",
-    "dist:mac": "npm run build && electron-builder --mac dmg zip --arm64 --x64",
     "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
-    "start": "electron ."
+    "start": "electron .",
+    "dist:win": "powershell -ExecutionPolicy Bypass -File scripts\\build-windows-installer.ps1",
+    "pack:win": "npm run icons && npm run build && electron-builder --win dir --x64 --config.directories.output=release-pack"
+  },
+  "build": {
+    "appId": "com.codedeployer.app",
+    "productName": "CodeDeployer",
+    "asar": true,
+    "npmRebuild": false,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json",
+      "node_modules/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "assets/icon.ico",
+        "to": "icon.ico"
+      }
+    ],
+    "win": {
+      "icon": "assets/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "${productName}-Setup-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "CodeDeployer"
+    }
   },
   "keywords": [
     "sftp",
+    "ftp",
     "sync",
     "electron",
     "deployment"
   ],
-  "author": "",
-  "license": "UNLICENSED",
-  "build": {
-    "appId": "com.codedeployer.app",
-    "productName": "CodeDeployer",
-    "directories": {
-      "output": "release"
-    },
-    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
-    "files": [
-      "dist/**/*",
-      "package.json",
-      "!node_modules/cpu-features/**",
-      "!node_modules/ssh2/lib/protocol/crypto/build/**"
-    ],
-    "npmRebuild": false,
-    "nodeGypRebuild": false,
-    "asarUnpack": [
-      "**/*.node"
-    ],
-    "mac": {
-      "category": "public.app-category.developer-tools",
-      "identity": null,
-      "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "arm64",
-            "x64"
-          ]
-        },
-        {
-          "target": "zip",
-          "arch": [
-            "arm64",
-            "x64"
-          ]
-        }
-      ]
-    },
-    "dmg": {}
-  },
+  "author": "CodeDeployer contributors",
+  "license": "MIT",
   "dependencies": {
     "basic-ftp": "^6.0.1",
     "chokidar": "^4.0.3",

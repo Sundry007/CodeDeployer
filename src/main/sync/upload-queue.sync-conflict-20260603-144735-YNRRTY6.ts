@@ -7,6 +7,7 @@ export interface QueueSnapshot {
 
 export class UploadQueue {
   private readonly pending: string[] = [];
+  private readonly activePaths = new Set<string>();
   private readonly queued = new Set<string>();
   private readonly timers = new Map<string, NodeJS.Timeout>();
   private activeUploads = 0;
@@ -41,15 +42,8 @@ export class UploadQueue {
     };
   }
 
-  dispose(): void {
-    for (const timer of this.timers.values()) {
-      clearTimeout(timer);
-    }
-
-    this.timers.clear();
-    this.pending.length = 0;
-    this.queued.clear();
-    this.onChange();
+  isPaused(): boolean {
+    return this.paused;
   }
 
   pause(): void {
@@ -63,15 +57,28 @@ export class UploadQueue {
     void this.pump();
   }
 
-  isPaused(): boolean {
-    return this.paused;
-  }
-
   clearPending(): void {
     for (const timer of this.timers.values()) {
       clearTimeout(timer);
     }
 
+    this.timers.clear();
+    this.pending.length = 0;
+    this.queued.clear();
+
+    for (const activePath of this.activePaths) {
+      this.queued.add(activePath);
+    }
+
+    this.onChange();
+  }
+
+  dispose(): void {
+    for (const timer of this.timers.values()) {
+      clearTimeout(timer);
+    }
+
+    this.paused = true;
     this.timers.clear();
     this.pending.length = 0;
     this.queued.clear();
@@ -102,12 +109,14 @@ export class UploadQueue {
       }
 
       this.activeUploads += 1;
+      this.activePaths.add(next);
       this.onChange();
 
       void this.upload(next)
         .catch(() => undefined)
         .finally(() => {
           this.activeUploads -= 1;
+          this.activePaths.delete(next);
           this.queued.delete(next);
           this.onChange();
           void this.pump();

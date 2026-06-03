@@ -166,7 +166,6 @@ export class SyncManager {
   async snapshot(): Promise<AppSnapshot> {
     return {
       profiles: await this.profileSource.list(),
-      workspaces: [],
       statuses: this.getStatuses(),
       logs: await this.logStore.list()
     };
@@ -501,5 +500,5 @@ function protocolLabel(profile: SyncProfile): string {
 }
 
 function credentialId(profile: SyncProfile): string {
-  return profile.secretId ?? profile.id;
+  return profile.id;
 }
